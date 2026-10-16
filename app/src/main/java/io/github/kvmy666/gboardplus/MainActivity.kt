@@ -1,5 +1,8 @@
 package io.github.kvmy666.gboardplus
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -80,6 +83,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private const val LAUNCHER_ALIAS = "io.github.kvmy666.gboardplus.Launcher"
+
+// The icon's visibility lives in the alias component state, so LSPosed can always
+// reach MainActivity itself (MAIN+INFO) and an app update resets the icon back on.
+private fun launcherIconHidden(ctx: Context): Boolean {
+    val state = ctx.packageManager.getComponentEnabledSetting(ComponentName(ctx, LAUNCHER_ALIAS))
+    return state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+}
+
+private fun setLauncherHidden(ctx: Context, hidden: Boolean): Boolean {
+    val state = if (hidden) PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+    else PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+    ctx.packageManager.setComponentEnabledSetting(
+        ComponentName(ctx, LAUNCHER_ALIAS), state, PackageManager.DONT_KILL_APP
+    )
+    return launcherIconHidden(ctx)
+}
+
 private class PrefState(private val ctx: android.content.Context) {
     private val prefs = GbpPrefs.prefs(ctx)
     // Observable backing so the switches/rows recompose when a value changes.
@@ -106,6 +127,7 @@ private fun SettingsScreen() {
     var aeActive by remember { mutableStateOf(GbpPrefs.aeKeyboardTweakActive(ctx)) }
     var busy by remember { mutableStateOf(false) }
     val root = remember { GbpPrefs.isRootAvailable() }
+    var launcherHidden by remember { mutableStateOf(launcherIconHidden(ctx)) }
 
     fun probe() { loaded = null; GbpPrefs.pingHook(ctx) { loaded = it } }
     LaunchedEffect(Unit) { probe() }
@@ -242,6 +264,11 @@ private fun SettingsScreen() {
             }
         }
 
+        item { SectionTitle("App") }
+        item { Toggle(R.drawable.ic_hide, "Hide launcher icon", "Hidden from the home screen · reopen via LSPosed manager", launcherHidden) {
+            launcherHidden = setLauncherHidden(ctx, it)
+        } }
+
         item {
             Text(
                 if (root) "Root available — full features enabled."
@@ -293,6 +320,7 @@ private fun Lead(@DrawableRes icon: Int) {
         R.drawable.ic_undo -> "↩️"
         R.drawable.ic_shake -> "📱"
         R.drawable.ic_speed -> "🌀"
+        R.drawable.ic_hide -> "🙈"
         else -> "•"
     }
     Box(Modifier.padding(end = 12.dp).size(24.dp), contentAlignment = Alignment.Center) {
